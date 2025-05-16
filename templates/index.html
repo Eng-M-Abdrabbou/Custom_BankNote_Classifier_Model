@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Object Detection</title>
+    <style>
+        #video-container {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            margin: 20px auto;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            border: 2px solid #333;
+        }
+        #capture-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        #capture-btn:hover {
+            background-color: #0056b3;
+        }
+        #result {
+            max-width: 640px;
+            margin: 20px auto;
+            padding: 15px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+        .object-name {
+            color: #28a745;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .no-object {
+            color: #dc3545;
+        }
+        .confidence {
+            color: #6c757d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="video-container">
+        <video id="video" autoplay></video>
+        <button id="capture-btn">Detect Object</button>
+    </div>
+    <div id="result"></div>
+
+    <script>
+        const video = document.getElementById('video');
+        const captureBtn = document.getElementById('capture-btn');
+        const resultDiv = document.getElementById('result');
+
+        // Access the camera
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error('Error accessing camera:', err);
+                resultDiv.innerHTML = 'Could not access camera';
+            });
+
+        // Handle capture button click
+        captureBtn.addEventListener('click', async () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('image', blob);
+
+                try {
+                    const response = await fetch('/detect', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        const result = data.result;
+                        let htmlContent;
+                        
+                        if (result.object === 'no_object_detected') {
+                            htmlContent = `
+                                <div class="no-object">
+                                    No known object detected (confidence: ${(result.confidence * 100).toFixed(1)}%)
+                                </div>
+                            `;
+                        } else {
+                            htmlContent = `
+                                <div class="object-name">
+                                    Detected: ${result.object}
+                                </div>
+                                <div class="confidence">
+                                    Confidence: ${(result.confidence * 100).toFixed(1)}%
+                                </div>
+                            `;
+                        }
+                        
+                        resultDiv.innerHTML = htmlContent;
+                    } else {
+                        resultDiv.innerHTML = `Error: ${data.error || 'Unknown error'}`;
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    resultDiv.innerHTML = 'Error detecting objects';
+                }
+            }, 'image/jpeg');
+        });
+    </script>
+</body>
+</html>
